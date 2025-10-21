@@ -1,1 +1,557 @@
 <H1>智慧導覽</H1>
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>虛擬數據風暴導覽系統 - 自訂版</title>
+    <style>
+        /* CSS 樣式與前一個回答基礎相同，增加 Modal 樣式 */
+        :root {
+            --neon-color: #00ffc8;
+            --highlight-color: #00ffff;
+            --dark-bg: #0d1117;
+            --card-bg: #1a1a2e;
+            --alert-color: #ff0077;
+        }
+
+        /* --- 全局設定與數據風暴基礎 --- */
+        body {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background-color: var(--dark-bg);
+            color: var(--neon-color);
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            line-height: 1.6;
+            text-shadow: 0 0 5px rgba(0, 255, 200, 0.5);
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* --- 標題區 --- */
+        .header {
+            background-color: rgba(0, 0, 0, 0.5);
+            border-bottom: 2px solid var(--neon-color);
+            padding: 10px 0;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            letter-spacing: 5px;
+            color: var(--highlight-color);
+            text-shadow: 0 0 15px var(--highlight-color);
+        }
+
+        /* --- API 設定區 & 控制面板 --- */
+        .api-settings, .control-panel {
+            background-color: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--neon-color);
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        
+        .api-settings input[type="text"], .control-panel select {
+            padding: 8px;
+            background-color: var(--card-bg);
+            border: 1px solid var(--highlight-color);
+            color: #ffffff;
+            font-size: 1em;
+        }
+        .api-settings input[type="text"] {
+            width: calc(100% - 10px);
+            margin-bottom: 10px;
+        }
+        .api-settings button, .control-panel button {
+            background-color: var(--highlight-color);
+            color: var(--card-bg);
+            border: none;
+            padding: 8px 15px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        .control-panel {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .control-panel select {
+            flex-grow: 1;
+        }
+
+        /* API Key 狀態 */
+        .api-settings input.valid { border-color: #00ff00; box-shadow: 0 0 10px #00ff00; }
+        .api-settings input.invalid { border-color: #ff0000; box-shadow: 0 0 10px #ff0000; }
+
+        /* --- 主內容佈局 --- */
+        .main-content { display: flex; gap: 20px; }
+        .main-content > div {
+            padding: 15px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--neon-color);
+            border-radius: 5px;
+            min-height: 400px;
+        }
+        .cards-area { flex: 1; overflow-y: auto; max-height: 700px; }
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--highlight-color);
+            padding: 10px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s, box-shadow 0.3s;
+        }
+        .card:hover, .card.selected {
+            background-color: rgba(0, 255, 200, 0.1);
+            box-shadow: 0 0 10px var(--highlight-color);
+            border-color: var(--alert-color);
+        }
+        .card .status { color: var(--alert-color); }
+        
+        /* --- 地圖展示區 --- */
+        .map-area {
+            flex: 2;
+            border: 5px double var(--highlight-color);
+            background-color: var(--card-bg);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+        }
+        .map-placeholder {
+            padding: 20px;
+            flex-grow: 1;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .tour-controls {
+            width: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            border-top: 1px solid var(--neon-color);
+            padding: 10px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        .tour-controls button {
+            background-color: var(--alert-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 1em;
+            text-shadow: 0 0 5px black;
+        }
+
+        /* --- Modal 樣式 --- */
+        .modal {
+            display: none; /* 預設隱藏 */
+            position: fixed;
+            z-index: 10;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.8); /* 半透明背景 */
+            backdrop-filter: blur(5px);
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: var(--dark-bg);
+            border: 3px double var(--alert-color);
+            padding: 30px;
+            width: 80%;
+            max-width: 600px;
+            border-radius: 8px;
+            box-shadow: 0 0 20px var(--alert-color);
+        }
+        .modal-content h3 {
+            color: var(--highlight-color);
+            border-bottom: 2px solid var(--neon-color);
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+        .modal-content input[type="text"], .modal-content input[type="number"], .modal-content textarea {
+            width: 95%;
+            padding: 10px;
+            margin: 5px 0 15px 0;
+            background-color: var(--card-bg);
+            border: 1px solid var(--neon-color);
+            color: white;
+            font-size: 1em;
+        }
+        .close-btn {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close-btn:hover {
+            color: var(--alert-color);
+        }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <h1>[數據風暴] 虛擬體驗導覽系統 V4.0</h1>
+        <p>:: 虛擬實境導覽系統 ::</p>
+    </header>
+
+    <div class="container">
+        
+        <div class="api-settings">
+            <h2>// 系統初始化與 API 金鑰設定</h2>
+            <label for="geminiApiKey">Gemini API 金鑰:</label>
+            <input type="text" id="geminiApiKey" placeholder="請輸入您的 Gemini API Key">
+            <button id="verifyApiKey">驗證金鑰</button>
+            <p id="apiStatus" style="font-size: 0.9em; margin-top: 10px;">狀態: API 金鑰未驗證</p>
+        </div>
+
+        <div class="control-panel">
+            <select name="country" id="countrySelect">
+                <option value="" disabled selected>目標國家/區域</option>
+            </select>
+            <select name="city" id="citySelect" disabled>
+                <option value="" disabled selected>縣市/行政區</option>
+            </select>
+            <button id="openModalBtn">自訂新增景點</button>
+        </div>
+
+        <div class="main-content">
+            
+            <div class="cards-area">
+                <h2>// 可選導覽目標 (目標清單)</h2>
+                <div id="attractionCards">
+                    <p style="text-align: center; color: #99ffff;">請先選擇目標國家/區域。</p>
+                </div>
+            </div>
+
+            <div class="map-area">
+                <div id="mapPlaceholder" class="map-placeholder">
+                    數據串流 // 地圖/街景影像載入中...<br>
+                    [00:00:00:01] 等待使用者輸入指令...
+                </div>
+                
+                <div class="tour-controls">
+                    <button id="generateImageBtn" disabled>生成虛擬街景圖</button>
+                    <button id="playAudioBtn" disabled>播放語音導覽</button>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <audio id="audioPlayer" hidden></audio>
+
+    <div id="attractionModal" class="modal">
+      <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <h3>// 新增自訂景點數據 //</h3>
+        <form id="addAttractionForm">
+            <label for="newCountry">國家代碼 (例如: TW, JP):</label>
+            <input type="text" id="newCountry" required>
+            
+            <label for="newName">景點名稱:</label>
+            <input type="text" id="newName" required>
+            
+            <label for="newCity">所在縣市/地區:</label>
+            <input type="text" id="newCity" required>
+
+            <label for="newLat">緯度 (Lat):</label>
+            <input type="number" id="newLat" step="0.0001" required>
+
+            <label for="newLon">經度 (Lon):</label>
+            <input type="number" id="newLon" step="0.0001" required>
+
+            <label for="newIntro">景點簡介:</label>
+            <textarea id="newIntro" rows="3" required></textarea>
+
+            <button type="submit" style="background-color: var(--neon-color); color: var(--dark-bg);">確認新增景點</button>
+        </form>
+      </div>
+    </div>
+
+    <script>
+        // --- 模擬資料庫 ---
+        // 景點 ID 將由 '國碼' + 索引 自動生成
+        let MOCK_DB = {
+            'TW': [
+                { id: 'TW001', name: '臺北 101 大樓', city: '臺北市', lat: 25.0339, lon: 121.5650, intro: '曾為世界第一高樓，是臺灣的標誌性建築。' },
+                { id: 'TW002', name: '國立故宮博物院', city: '臺北市', lat: 25.1017, lon: 121.5485, intro: '典藏近 70 萬件中華文物與藝術珍品。' },
+            ],
+            'JP': [
+                { id: 'JP001', name: '富士山', city: '靜岡縣', lat: 35.3606, lon: 138.7278, intro: '日本的象徵，是一座活火山，也是日本最高的山峰。' },
+            ]
+        };
+
+        // --- 狀態管理 ---
+        let isApiKeyValid = false;
+        let selectedAttraction = null;
+
+        // --- DOM 元素快取 ---
+        const geminiApiKeyInput = document.getElementById('geminiApiKey');
+        const verifyApiKeyBtn = document.getElementById('verifyApiKey');
+        const apiStatus = document.getElementById('apiStatus');
+        const countrySelect = document.getElementById('countrySelect');
+        const citySelect = document.getElementById('citySelect');
+        const attractionCardsDiv = document.getElementById('attractionCards');
+        const mapPlaceholder = document.getElementById('mapPlaceholder');
+        const generateImageBtn = document.getElementById('generateImageBtn');
+        const playAudioBtn = document.getElementById('playAudioBtn');
+        const audioPlayer = document.getElementById('audioPlayer');
+        
+        // Modal 元素
+        const modal = document.getElementById('attractionModal');
+        const openModalBtn = document.getElementById('openModalBtn');
+        const closeBtn = document.querySelector('.close-btn');
+        const addAttractionForm = document.getElementById('addAttractionForm');
+
+
+        // --- 函式: 初始化國家選單 ---
+        function initializeCountrySelect() {
+            countrySelect.innerHTML = '<option value="" disabled selected>目標國家/區域</option>';
+            const countries = Object.keys(MOCK_DB).sort();
+            countries.forEach(code => {
+                const option = document.createElement('option');
+                option.value = code;
+                option.textContent = code;
+                countrySelect.appendChild(option);
+            });
+            // 由於資料庫可能被修改，重新渲染一次
+            renderAttractionCards(countrySelect.value);
+        }
+
+        // --- 函式: 渲染景點卡片 ---
+        function renderAttractionCards(countryCode) {
+            attractionCardsDiv.innerHTML = '';
+            const attractions = MOCK_DB[countryCode] || [];
+
+            if (attractions.length === 0) {
+                attractionCardsDiv.innerHTML = '<p style="text-align: center; color: var(--neon-color);">該國家尚無景點資料。</p>';
+                return;
+            }
+
+            attractions.forEach(attraction => {
+                const card = document.createElement('div');
+                card.classList.add('card');
+                card.setAttribute('data-id', attraction.id);
+                card.innerHTML = `
+                    <h3>[${attraction.id}] ${attraction.name}</h3>
+                    <p>${attraction.city} | 座標: ${attraction.lat.toFixed(4)} N, ${attraction.lon.toFixed(4)} E</p>
+                    <p class="status">狀態: 資料完備</p>
+                `;
+                card.addEventListener('click', () => selectAttraction(attraction));
+                attractionCardsDiv.appendChild(card);
+            });
+        }
+
+        // --- 函式: 選擇景點並顯示資訊 ---
+        function selectAttraction(attraction) {
+            // 清除所有卡片的 selected 狀態
+            document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+            
+            selectedAttraction = attraction;
+            
+            // 為當前卡片添加 selected 狀態
+            document.querySelector(`.card[data-id='${attraction.id}']`).classList.add('selected');
+
+            // 更新地圖顯示區
+            mapPlaceholder.innerHTML = `
+                <div style="width: 80%; padding: 20px; text-align: left; border: 1px dashed var(--highlight-color); margin: 10px;">
+                    <p style="color: var(--highlight-color); font-size: 1.2em; text-align: center; margin-bottom: 10px;">// 景點資訊緩衝區 //</p>
+                    <p style="font-size: 1.5em; font-weight: bold; color: white;">目標景點: ${attraction.name}</p>
+                    <p style="font-size: 1em;">** 座標: ${attraction.lat.toFixed(4)} N, ${attraction.lon.toFixed(4)} E **</p>
+                    <p style="font-size: 0.9em; color: #99ffff;">簡介: ${attraction.intro}</p>
+                </div>
+                <div style="font-size: 1em; color: var(--alert-color);">[警告] 虛擬街景尚未載入。請點擊按鈕生成影像。</div>
+            `;
+            
+            updateControlButtons();
+        }
+
+        // --- 函式: 啟用/禁用控制按鈕 ---
+        function updateControlButtons() {
+            const canProceed = isApiKeyValid && selectedAttraction;
+            generateImageBtn.disabled = !canProceed;
+            playAudioBtn.disabled = !canProceed;
+            
+            if (canProceed) {
+                generateImageBtn.textContent = '生成虛擬街景圖';
+                playAudioBtn.textContent = '播放語音導覽';
+            } else {
+                 if (!isApiKeyValid) {
+                     generateImageBtn.textContent = 'API 金鑰無效';
+                 } else if (!selectedAttraction) {
+                      generateImageBtn.textContent = '請選擇景點';
+                 }
+            }
+        }
+
+        // --- 事件監聽器 ---
+
+        // 1. API 驗證
+        verifyApiKeyBtn.addEventListener('click', async () => {
+            const apiKey = geminiApiKeyInput.value.trim();
+            geminiApiKeyInput.classList.remove('valid', 'invalid');
+
+            if (!apiKey) {
+                apiStatus.innerHTML = '狀態: <span style="color: #ff0000;">請輸入金鑰！</span>';
+                return;
+            }
+
+            apiStatus.textContent = '狀態: 驗證中...';
+
+            // 模擬 API 驗證邏輯
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            if (apiKey.startsWith('AIzaSy')) {
+                isApiKeyValid = true;
+                geminiApiKeyInput.classList.add('valid');
+                apiStatus.innerHTML = '狀態: <span style="color: #00ff00;">API 金鑰驗證成功</span>。功能已啟用。';
+            } else {
+                isApiKeyValid = false;
+                geminiApiKeyInput.classList.add('invalid');
+                apiStatus.innerHTML = '狀態: <span style="color: #ff0000;">API 金鑰驗證失敗</span>。';
+            }
+            updateControlButtons();
+        });
+
+        // 2. 國家選單改變
+        countrySelect.addEventListener('change', () => {
+            const countryCode = countrySelect.value;
+            renderAttractionCards(countryCode);
+            // 重置選單狀態
+            citySelect.disabled = false;
+            citySelect.innerHTML = '<option value="" disabled selected>縣市/行政區</option>';
+            selectedAttraction = null;
+            updateControlButtons();
+            
+            // 填充城市選單 (僅為模擬，未實現過濾功能)
+            const cities = new Set(MOCK_DB[countryCode].map(a => a.city));
+            cities.forEach(city => {
+                const option = document.createElement('option');
+                option.value = city;
+                option.textContent = city;
+                citySelect.appendChild(option);
+            });
+        });
+
+        // 3. 生成圖片按鈕 (模擬)
+        generateImageBtn.addEventListener('click', async () => {
+            if (!isApiKeyValid || !selectedAttraction) return;
+
+            mapPlaceholder.innerHTML = `<div class="map-placeholder">
+                <p style="color: var(--alert-color);">[處理中] 正在使用 Gemini 繪製虛擬街景影像...</p>
+                <p style="font-size: 0.8em;">景點: ${selectedAttraction.name}。請等待...</p>
+            </div>`;
+            generateImageBtn.disabled = true;
+
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            const mockImageUrl = `https://picsum.photos/id/${Math.floor(Math.random() * 100)}/800/400`;
+
+            mapPlaceholder.innerHTML = `
+                <img src="${mockImageUrl}" alt="${selectedAttraction.name} 虛擬街景" style="width: 100%; height: auto; border: 2px solid var(--highlight-color);">
+                <p style="font-size: 0.9em; margin-top: 5px;">[渲染成功] 虛擬影像載入完成。</p>
+            `;
+            generateImageBtn.disabled = false;
+        });
+
+        // 4. 播放語音按鈕 (模擬)
+        playAudioBtn.addEventListener('click', async () => {
+            if (!isApiKeyValid || !selectedAttraction) return;
+
+            playAudioBtn.textContent = '生成語音中...';
+            playAudioBtn.disabled = true;
+
+            await new Promise(resolve => setTimeout(resolve, 1500)); 
+
+            audioPlayer.src = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+            audioPlayer.play();
+
+            playAudioBtn.textContent = '▶ 播放中...';
+            playAudioBtn.disabled = false;
+            
+            audioPlayer.onended = () => {
+                playAudioBtn.textContent = '播放語音導覽 (重播)';
+            };
+        });
+
+
+        // --- Modal 互動功能 ---
+
+        // 開啟 Modal
+        openModalBtn.addEventListener('click', () => {
+            modal.style.display = 'flex';
+        });
+
+        // 關閉 Modal (點擊 X)
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+        });
+
+        // 關閉 Modal (點擊視窗外)
+        window.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+
+        // 提交表單新增景點
+        addAttractionForm.addEventListener('submit', (event) => {
+            event.preventDefault(); // 阻止表單預設提交行為
+            
+            const countryCode = document.getElementById('newCountry').value.trim().toUpperCase();
+            const newAttraction = {
+                id: countryCode + String((MOCK_DB[countryCode] ? MOCK_DB[countryCode].length : 0) + 1).padStart(3, '0'),
+                name: document.getElementById('newName').value.trim(),
+                city: document.getElementById('newCity').value.trim(),
+                lat: parseFloat(document.getElementById('newLat').value),
+                lon: parseFloat(document.getElementById('newLon').value),
+                intro: document.getElementById('newIntro').value.trim()
+            };
+
+            // 驗證經緯度
+            if (isNaN(newAttraction.lat) || isNaN(newAttraction.lon)) {
+                alert('經緯度輸入無效，請檢查！');
+                return;
+            }
+
+            // 將新景點加入資料庫
+            if (!MOCK_DB[countryCode]) {
+                MOCK_DB[countryCode] = []; // 創建新的國家陣列
+                initializeCountrySelect(); // 如果是新國家，更新國家選單
+            }
+            MOCK_DB[countryCode].push(newAttraction);
+
+            // 成功訊息並關閉 Modal
+            alert(`景點 [${newAttraction.name}] 已成功新增到 ${countryCode}！`);
+            addAttractionForm.reset();
+            modal.style.display = 'none';
+
+            // 如果當前選擇的國家就是新景點的國家，則刷新卡片區
+            if (countrySelect.value === countryCode) {
+                renderAttractionCards(countryCode);
+            }
+        });
+
+
+        // --- 系統初始化 ---
+        initializeCountrySelect();
+        updateControlButtons();
+        
+    </script>
+</body>
+</html>
